@@ -34,14 +34,6 @@ export default function WelcomePage() {
           {theme === "dark" ? "☾" : "☀"}
         </button>
 
-        <div className="welcome-orbit" aria-hidden="true">
-          <span className="orbit-ring ring-one" />
-          <span className="orbit-ring ring-two" />
-          <span className="orbit-dot dot-one" />
-          <span className="orbit-dot dot-two" />
-          <span className="orbit-dot dot-three" />
-        </div>
-
         <div className="welcome-copy">
           <div className="welcome-mark">M</div>
           <p className="eyebrow">MindPath AI</p>

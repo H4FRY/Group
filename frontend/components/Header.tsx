@@ -6,11 +6,14 @@ import { useEffect, useState } from "react";
 import { apiRequest, clearToken, getToken, saveCurrentSession } from "@/lib/api";
 import type { Session } from "@/lib/types";
 
+type Theme = "light" | "dark";
+
 export default function Header() {
   const router = useRouter();
   const pathname = usePathname();
   const [open, setOpen] = useState(true);
   const [sessions, setSessions] = useState<Session[]>([]);
+  const [theme, setTheme] = useState<Theme>("light");
   const showAppNav = pathname !== "/" && pathname !== "/login";
 
   useEffect(() => {
@@ -36,9 +39,23 @@ export default function Header() {
     };
   }, [open, showAppNav]);
 
+  useEffect(() => {
+    const saved = localStorage.getItem("mindpath_theme") as Theme | null;
+    const initialTheme = saved === "dark" ? "dark" : "light";
+    setTheme(initialTheme);
+    document.documentElement.dataset.theme = initialTheme;
+  }, []);
+
   function logout() {
     clearToken();
     router.push("/login");
+  }
+
+  function toggleTheme() {
+    const nextTheme: Theme = theme === "dark" ? "light" : "dark";
+    setTheme(nextTheme);
+    localStorage.setItem("mindpath_theme", nextTheme);
+    document.documentElement.dataset.theme = nextTheme;
   }
 
   if (!showAppNav) {
@@ -54,6 +71,14 @@ export default function Header() {
         aria-label={open ? "Hide menu" : "Show menu"}
       >
         {open ? "Hide" : "Menu"}
+      </button>
+      <button
+        className="app-theme-toggle"
+        type="button"
+        onClick={toggleTheme}
+        aria-label="Toggle color theme"
+      >
+        {theme === "dark" ? "☾" : "☀"}
       </button>
 
       <aside className={`app-sidebar ${open ? "open" : "closed"}`}>

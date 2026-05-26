@@ -36,11 +36,6 @@ export default function LoginPage() {
   return (
     <div className="auth-screen">
       <section className="auth-stage" aria-label="MindPath AI authentication">
-        <div className="auth-shape shape-left" aria-hidden="true" />
-        <div className="auth-shape shape-right" aria-hidden="true" />
-        <div className="auth-wave wave-one" aria-hidden="true" />
-        <div className="auth-wave wave-two" aria-hidden="true" />
-
         <div className="auth-card">
           <div>
             <p className="auth-brand">MindPath AI</p>
