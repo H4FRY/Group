@@ -14,8 +14,8 @@ type AuthResponse = {
 export default function LoginPage() {
   const router = useRouter();
   const [mode, setMode] = useState<"login" | "register">("login");
-  const [email, setEmail] = useState("student@example.com");
-  const [password, setPassword] = useState("123456");
+  const [email, setEmail] = useState("");
+  const [password, setPassword] = useState("");
   const [error, setError] = useState("");
 
   async function submit(event: FormEvent) {
@@ -34,28 +34,34 @@ export default function LoginPage() {
   }
 
   return (
-    <div className="container">
-      <section className="hero">
-        <div className="card">
-          <p className="eyebrow">Account</p>
-          <h1>{mode === "login" ? "Log in" : "Register"}</h1>
-          <p>
-            Create a local account for testing. The backend stores sessions, messages,
-            mini-app results, and progress entries in SQLite.
-          </p>
-        </div>
+    <div className="auth-screen">
+      <section className="auth-stage" aria-label="MindPath AI authentication">
+        <div className="auth-shape shape-left" aria-hidden="true" />
+        <div className="auth-shape shape-right" aria-hidden="true" />
+        <div className="auth-wave wave-one" aria-hidden="true" />
+        <div className="auth-wave wave-two" aria-hidden="true" />
 
-        <form className="panel form" onSubmit={submit}>
-          <div className="actions">
+        <div className="auth-card">
+          <div>
+            <p className="auth-brand">MindPath AI</p>
+            <h1>{mode === "login" ? "Login" : "Register"}</h1>
+            <p className="auth-copy">
+              {mode === "login"
+                ? "Sign in to continue your reflection sessions."
+                : "Create your account to start using the workspace."}
+            </p>
+          </div>
+
+          <div className="auth-mode-switch" aria-label="Authentication mode">
             <button
-              className={mode === "login" ? "button" : "secondary-button"}
+              className={mode === "login" ? "active" : ""}
               type="button"
               onClick={() => setMode("login")}
             >
               Login
             </button>
             <button
-              className={mode === "register" ? "button" : "secondary-button"}
+              className={mode === "register" ? "active" : ""}
               type="button"
               onClick={() => setMode("register")}
             >
@@ -63,23 +69,44 @@ export default function LoginPage() {
             </button>
           </div>
 
-          <label>
-            Email
-            <input value={email} onChange={(event) => setEmail(event.target.value)} />
-          </label>
-          <label>
-            Password
-            <input
-              type="password"
-              value={password}
-              onChange={(event) => setPassword(event.target.value)}
-            />
-          </label>
-          {error && <p className="error">{error}</p>}
-          <button className="button" type="submit">
-            {mode === "login" ? "Log in" : "Create account"}
-          </button>
-        </form>
+          <form className="auth-form" onSubmit={submit}>
+            <label>
+              Email
+              <input
+                type="email"
+                value={email}
+                placeholder="username@gmail.com"
+                onChange={(event) => setEmail(event.target.value)}
+              />
+            </label>
+            <label>
+              Password
+              <input
+                type="password"
+                value={password}
+                placeholder="Password"
+                onChange={(event) => setPassword(event.target.value)}
+              />
+            </label>
+            <div className="auth-helper-row">
+              <span>{mode === "login" ? "Forgot password?" : "Use at least 6 characters."}</span>
+            </div>
+            {error && <p className="auth-error">{error}</p>}
+            <button className="auth-submit" type="submit">
+              {mode === "login" ? "Sign in" : "Create account"}
+            </button>
+          </form>
+
+          <p className="auth-footer">
+            {mode === "login" ? "Do not have an account?" : "Already have an account?"}
+            <button
+              type="button"
+              onClick={() => setMode(mode === "login" ? "register" : "login")}
+            >
+              {mode === "login" ? "Register for free" : "Sign in"}
+            </button>
+          </p>
+        </div>
       </section>
     </div>
   );
