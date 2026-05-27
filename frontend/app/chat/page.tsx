@@ -38,6 +38,7 @@ function ChatContent() {
   const [route, setRoute] = useState<RouteResponse | null>(null);
   const [suggestedApp, setSuggestedApp] = useState<ChatResponse | null>(null);
   const [error, setError] = useState("");
+  const [analyzing, setAnalyzing] = useState(false);
 
   useEffect(() => {
     async function setupSession() {
@@ -91,27 +92,17 @@ function ChatContent() {
     }
   }
 
-  async function buildContext() {
+  async function analyzeSession() {
     if (!sessionId) {
       return;
     }
     setError("");
+    setAnalyzing(true);
     try {
       const savedContext = await apiRequest<ContextFile>(`/context/${sessionId}/build`, {
         method: "POST"
       });
       setContext(savedContext);
-    } catch (err) {
-      setError(err instanceof Error ? err.message : "Could not build context");
-    }
-  }
-
-  async function runRouter() {
-    if (!sessionId) {
-      return;
-    }
-    setError("");
-    try {
       const response = await apiRequest<RouteResponse>(`/router/${sessionId}/route`, {
         method: "POST"
       });
@@ -119,7 +110,9 @@ function ChatContent() {
       setContext(response.context);
       setSuggestedApp(null);
     } catch (err) {
-      setError(err instanceof Error ? err.message : "Could not route session");
+      setError(err instanceof Error ? err.message : "Could not analyze session");
+    } finally {
+      setAnalyzing(false);
     }
   }
 
@@ -128,7 +121,7 @@ function ChatContent() {
       <section className="card">
         <p className="eyebrow">Main chat</p>
         <h1>Describe the situation</h1>
-        <p>Write a short message. Then build context and let the router select a mini-app.</p>
+        <p>Write a short message, then analyze the session to get one recommended guided tool.</p>
       </section>
 
       <div className="grid grid-2">
@@ -145,13 +138,13 @@ function ChatContent() {
 
           {suggestedApp?.suggested_app && sessionId && (
             <div className="list-item">
-              <strong>AI suggests: {suggestedApp.suggested_app_title}</strong>
+              <strong>Suggested tool: {suggestedApp.suggested_app_title}</strong>
               <div className="actions">
                 <Link
                   className="button"
                   href={`/apps/${suggestedApp.suggested_app}?session=${sessionId}`}
-                >
-                  Open mini-app
+              >
+                  Open guided tool
                 </Link>
               </div>
             </div>
@@ -170,8 +163,14 @@ function ChatContent() {
             {error && <p className="error">{error}</p>}
             <div className="actions">
               <button className="button" type="submit">Send</button>
-              <button className="secondary-button" type="button" onClick={buildContext}>Build context</button>
-              <button className="secondary-button" type="button" onClick={runRouter}>Recommend mini-app</button>
+              <button
+                className="secondary-button"
+                type="button"
+                onClick={analyzeSession}
+                disabled={analyzing || messages.length === 0}
+              >
+                {analyzing ? "Analyzing..." : "Analyze and recommend tool"}
+              </button>
             </div>
           </form>
         </section>
@@ -187,12 +186,12 @@ function ChatContent() {
                 <div className="list-item"><strong>Constraints</strong><p>{context.constraints}</p></div>
               </div>
             ) : (
-              <p>Build context after sending a message.</p>
+              <p>Send a message, then analyze the session.</p>
             )}
           </section>
 
           <section className="panel">
-            <h2>Router</h2>
+            <h2>Recommendation</h2>
             {route ? (
               <div className="grid">
                 <div className="list-item">
@@ -201,13 +200,13 @@ function ChatContent() {
                 </div>
                 <div className="actions">
                   <Link className="button" href={`/apps/${route.recommended_app}?session=${sessionId}`}>
-                    Open mini-app
+                    Open guided tool
                   </Link>
                   <Link className="secondary-button" href={`/summary?session=${sessionId}`}>Summary</Link>
                 </div>
               </div>
             ) : (
-              <p>Run the router to get a recommendation.</p>
+              <p>Analyze the session to get a recommendation.</p>
             )}
           </section>
         </aside>

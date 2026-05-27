@@ -11,11 +11,16 @@ from ..mini_apps_catalog import MINI_APPS
 
 logger = logging.getLogger(__name__)
 
-ProviderName = Literal["groq", "gemini", "none"]
+ProviderName = Literal["openai", "vercel", "groq", "gemini", "none"]
 
+OPENAI_BASE_URL = "https://api.openai.com/v1"
+AI_GATEWAY_BASE_URL = "https://ai-gateway.vercel.sh/v1"
 GEMINI_BASE_URL = "https://generativelanguage.googleapis.com/v1beta"
 GROQ_BASE_URL = "https://api.groq.com/openai/v1"
-DEFAULT_GEMINI_MODEL = "gemini-2.0-flash"
+
+DEFAULT_OPENAI_MODEL = "gpt-4o-mini"
+DEFAULT_AI_GATEWAY_MODEL = "openai/gpt-4o-mini"
+DEFAULT_GEMINI_MODEL = "gemini-2.5-flash"
 DEFAULT_GROQ_MODEL = "llama-3.3-70b-versatile"
 
 VALID_APP_IDS = frozenset(MINI_APPS.keys())
@@ -74,6 +79,14 @@ Use the same language as the user's answers. Plain text only, no JSON, 3-6 sente
 
 class LlmService:
     @staticmethod
+    def openai_api_key() -> str:
+        return os.getenv("OPENAI_API_KEY", "").strip()
+
+    @staticmethod
+    def ai_gateway_api_key() -> str:
+        return os.getenv("AI_GATEWAY_API_KEY", "").strip()
+
+    @staticmethod
     def gemini_api_key() -> str:
         return os.getenv("GEMINI_API_KEY", "").strip()
 
@@ -84,26 +97,71 @@ class LlmService:
     @staticmethod
     def provider() -> ProviderName:
         explicit = os.getenv("LLM_PROVIDER", "auto").strip().lower()
+
+        has_openai = bool(LlmService.openai_api_key())
+        has_gateway = bool(LlmService.ai_gateway_api_key())
         has_groq = bool(LlmService.groq_api_key())
         has_gemini = bool(LlmService.gemini_api_key())
 
+        if explicit == "openai":
+            return "openai" if has_openai else "none"
+
+        if explicit in {"vercel", "gateway", "ai-gateway", "ai_gateway"}:
+            return "vercel" if has_gateway else "none"
+
         if explicit == "groq":
             return "groq" if has_groq else "none"
+
         if explicit in {"gemini", "google"}:
             return "gemini" if has_gemini else "none"
+
+        if has_gateway:
+            return "vercel"
+        if has_openai:
+            return "openai"
         if has_groq:
             return "groq"
         if has_gemini:
             return "gemini"
+
         return "none"
+
+    @staticmethod
+    def _normalize_gemini_model(model: str) -> str:
+        model = model.strip()
+
+        if model.startswith("models/"):
+            model = model.removeprefix("models/")
+
+        # На случай если в .env осталась старая модель
+        deprecated_aliases = {
+            "gemini-1.5-flash": "gemini-2.5-flash",
+            "gemini-1.5-pro": "gemini-2.5-flash",
+            "gemini-2.0-flash": "gemini-2.5-flash",
+        }
+
+        return deprecated_aliases.get(model, model)
 
     @staticmethod
     def model() -> str | None:
         provider = LlmService.provider()
+
+        if provider == "openai":
+            return os.getenv("OPENAI_MODEL", DEFAULT_OPENAI_MODEL).strip() or DEFAULT_OPENAI_MODEL
+
+        if provider == "vercel":
+            return (
+                os.getenv("AI_GATEWAY_MODEL", DEFAULT_AI_GATEWAY_MODEL).strip()
+                or DEFAULT_AI_GATEWAY_MODEL
+            )
+
         if provider == "groq":
             return os.getenv("GROQ_MODEL", DEFAULT_GROQ_MODEL).strip() or DEFAULT_GROQ_MODEL
+
         if provider == "gemini":
-            return os.getenv("GEMINI_MODEL", DEFAULT_GEMINI_MODEL).strip() or DEFAULT_GEMINI_MODEL
+            model = os.getenv("GEMINI_MODEL", DEFAULT_GEMINI_MODEL).strip() or DEFAULT_GEMINI_MODEL
+            return LlmService._normalize_gemini_model(model)
+
         return None
 
     @staticmethod
@@ -121,6 +179,7 @@ class LlmService:
             return reply, app, False
 
         prompt = LlmService._build_chat_prompt(history, user_text, session_title)
+
         try:
             raw = await LlmService._generate(
                 system_instruction=CHAT_SYSTEM_PROMPT,
@@ -130,6 +189,7 @@ class LlmService:
             )
             reply, app = LlmService._parse_chat_response(raw, user_text)
             return reply, app, True
+
         except Exception as exc:
             logger.exception("%s chat request failed", LlmService.provider())
             return LlmService._llm_unavailable_message(exc), None, False
@@ -145,6 +205,7 @@ class LlmService:
             f"{context_text}\n\n"
             "Pick the most suitable mini-app for this user right now."
         )
+
         try:
             raw = await LlmService._generate(
                 system_instruction=ROUTER_SYSTEM_PROMPT,
@@ -154,6 +215,7 @@ class LlmService:
             )
             app_id, reason = LlmService._parse_route_response(raw, context_text)
             return app_id, reason, True
+
         except Exception as exc:
             logger.exception("%s router request failed", LlmService.provider())
             app_id, reason = LlmService._fallback_route(context_text)
@@ -164,6 +226,7 @@ class LlmService:
     async def build_context_fields(conversation: str) -> dict[str, str] | None:
         if not LlmService.is_configured() or not conversation.strip():
             return None
+
         try:
             raw = await LlmService._generate(
                 system_instruction=CONTEXT_SYSTEM_PROMPT,
@@ -171,7 +234,9 @@ class LlmService:
                 temperature=0.3,
                 json_mode=True,
             )
+
             data = LlmService._load_json(raw)
+
             fields = {
                 "problem": str(data.get("problem", "")).strip(),
                 "emotion": str(data.get("emotion", "")).strip(),
@@ -179,10 +244,13 @@ class LlmService:
                 "constraints": str(data.get("constraints", "")).strip(),
                 "summary": str(data.get("summary", "")).strip(),
             }
+
             if fields["problem"] and fields["summary"]:
                 return fields
+
         except Exception:
             logger.exception("%s context build failed", LlmService.provider())
+
         return None
 
     @staticmethod
@@ -193,26 +261,32 @@ class LlmService:
             str(index + 1),
             question,
         )
+
         for key in candidates:
             if key in answers and str(answers[key]).strip():
                 return str(answers[key]).strip()
+
         for k, v in answers.items():
             if str(v).strip() and str(k).lower() in question.lower()[:24]:
                 return str(v).strip()
+
         return ""
 
     @staticmethod
     def _format_mini_app_qa(questions: list[str], answers: dict[str, Any]) -> list[str]:
         lines = []
+
         for index, question in enumerate(questions):
             answer = LlmService._answer_for_question(answers, index, question)
             lines.append(f"Q: {question}\nA: {answer or '(not answered yet)'}")
+
         return lines
 
     @staticmethod
     def _has_any_answer(questions: list[str], answers: dict[str, Any]) -> bool:
         return any(
-            LlmService._answer_for_question(answers, i, q) for i, q in enumerate(questions)
+            LlmService._answer_for_question(answers, i, q)
+            for i, q in enumerate(questions)
         )
 
     @staticmethod
@@ -230,9 +304,13 @@ class LlmService:
             return LlmService._fallback_mini_app_insight(questions, answers), False
 
         qa_block = "\n\n".join(LlmService._format_mini_app_qa(questions, answers))
+
         context_block = ""
         if session_context.strip():
-            context_block = f"Earlier chat context from this session:\n{session_context.strip()}\n\n"
+            context_block = (
+                f"Earlier chat context from this session:\n"
+                f"{session_context.strip()}\n\n"
+            )
 
         prompt = (
             f"Mini-app: {app_title} ({app_id})\n\n"
@@ -240,6 +318,7 @@ class LlmService:
             f"Current answers:\n{qa_block}\n\n"
             "Give an insight for the user based on what they shared so far."
         )
+
         try:
             text = await LlmService._generate(
                 system_instruction=MINI_APP_INSIGHT_PROMPT,
@@ -248,6 +327,7 @@ class LlmService:
                 json_mode=False,
             )
             return text, True
+
         except Exception as exc:
             logger.exception("%s mini-app insight failed", LlmService.provider())
             return LlmService._llm_unavailable_message(exc), False
@@ -267,6 +347,7 @@ class LlmService:
             return None
 
         qa_block = "\n\n".join(LlmService._format_mini_app_qa(questions, answers))
+
         context_block = ""
         if session_context.strip():
             context_block = f"Earlier chat context:\n{session_context.strip()}\n\n"
@@ -277,6 +358,7 @@ class LlmService:
             f"{qa_block}\n\n"
             "Write the personalized final result for the user."
         )
+
         try:
             return await LlmService._generate(
                 system_instruction=MINI_APP_SYSTEM_PROMPT,
@@ -284,6 +366,7 @@ class LlmService:
                 temperature=0.6,
                 json_mode=False,
             )
+
         except Exception:
             logger.exception("%s mini-app result failed", LlmService.provider())
             return None
@@ -295,7 +378,9 @@ class LlmService:
             for i, q in enumerate(questions)
             if LlmService._answer_for_question(answers, i, q)
         ]
+
         preview = filled[0][:200] if filled else ""
+
         return (
             f"From what you shared: «{preview}». "
             "Consider what feels most important right now and complete the remaining questions "
@@ -311,6 +396,16 @@ class LlmService:
         json_mode: bool = False,
     ) -> str:
         provider = LlmService.provider()
+
+        if provider in {"openai", "vercel"}:
+            return await LlmService._generate_openai_compatible(
+                provider=provider,
+                system_instruction=system_instruction,
+                user_prompt=user_prompt,
+                temperature=temperature,
+                json_mode=json_mode,
+            )
+
         if provider == "groq":
             return await LlmService._generate_groq(
                 system_instruction=system_instruction,
@@ -318,6 +413,7 @@ class LlmService:
                 temperature=temperature,
                 json_mode=json_mode,
             )
+
         if provider == "gemini":
             return await LlmService._generate_gemini(
                 system_instruction=system_instruction,
@@ -325,7 +421,90 @@ class LlmService:
                 temperature=temperature,
                 json_mode=json_mode,
             )
+
         raise RuntimeError("No LLM provider configured")
+
+    @staticmethod
+    def _openai_compatible_base_url(provider: ProviderName) -> str:
+        if provider == "vercel":
+            return (
+                os.getenv("AI_GATEWAY_BASE_URL", AI_GATEWAY_BASE_URL).strip()
+                or AI_GATEWAY_BASE_URL
+            )
+
+        return os.getenv("OPENAI_BASE_URL", OPENAI_BASE_URL).strip() or OPENAI_BASE_URL
+
+    @staticmethod
+    def _openai_compatible_api_key(provider: ProviderName) -> str:
+        if provider == "vercel":
+            return LlmService.ai_gateway_api_key()
+
+        return LlmService.openai_api_key()
+
+    @staticmethod
+    async def _generate_openai_compatible(
+        *,
+        provider: ProviderName,
+        system_instruction: str,
+        user_prompt: str,
+        temperature: float,
+        json_mode: bool,
+    ) -> str:
+        payload: dict[str, Any] = {
+            "model": LlmService.model(),
+            "messages": [
+                {"role": "system", "content": system_instruction},
+                {"role": "user", "content": user_prompt},
+            ],
+            "temperature": temperature,
+            "max_tokens": 2048,
+        }
+
+        if json_mode:
+            payload["response_format"] = {"type": "json_object"}
+
+        async with httpx.AsyncClient(timeout=60.0) as client:
+            response = await client.post(
+                f"{LlmService._openai_compatible_base_url(provider).rstrip('/')}/chat/completions",
+                headers={
+                    "Authorization": f"Bearer {LlmService._openai_compatible_api_key(provider)}",
+                    "Content-Type": "application/json",
+                },
+                json=payload,
+            )
+
+            if response.is_error and json_mode and response.status_code == 400:
+                payload.pop("response_format", None)
+
+                response = await client.post(
+                    f"{LlmService._openai_compatible_base_url(provider).rstrip('/')}/chat/completions",
+                    headers={
+                        "Authorization": f"Bearer {LlmService._openai_compatible_api_key(provider)}",
+                        "Content-Type": "application/json",
+                    },
+                    json=payload,
+                )
+
+            if response.is_error:
+                LlmService._raise_for_status(response, provider=provider)
+
+            data = response.json()
+
+        return LlmService._extract_openai_compatible_text(data, provider=provider)
+
+    @staticmethod
+    def _extract_openai_compatible_text(data: dict[str, Any], *, provider: str) -> str:
+        choices = data.get("choices") or []
+
+        if not choices:
+            raise ValueError(f"{provider} returned no choices")
+
+        text = (choices[0].get("message") or {}).get("content", "").strip()
+
+        if not text:
+            raise ValueError(f"{provider} returned empty text")
+
+        return text
 
     @staticmethod
     async def _generate_groq(
@@ -344,6 +523,7 @@ class LlmService:
             "temperature": temperature,
             "max_tokens": 2048,
         }
+
         if json_mode:
             payload["response_format"] = {"type": "json_object"}
 
@@ -356,18 +536,13 @@ class LlmService:
                 },
                 json=payload,
             )
+
             if response.is_error:
                 LlmService._raise_for_status(response, provider="groq")
+
             data = response.json()
 
-        choices = data.get("choices") or []
-        if not choices:
-            raise ValueError("Groq returned no choices")
-
-        text = (choices[0].get("message") or {}).get("content", "").strip()
-        if not text:
-            raise ValueError("Groq returned empty text")
-        return text
+        return LlmService._extract_openai_compatible_text(data, provider="groq")
 
     @staticmethod
     async def _generate_gemini(
@@ -381,52 +556,81 @@ class LlmService:
             "temperature": temperature,
             "maxOutputTokens": 2048,
         }
+
         if json_mode:
             generation_config["responseMimeType"] = "application/json"
 
         payload: dict[str, Any] = {
-            "systemInstruction": {"parts": [{"text": system_instruction}]},
-            "contents": [{"role": "user", "parts": [{"text": user_prompt}]}],
+            "systemInstruction": {
+                "parts": [
+                    {
+                        "text": system_instruction,
+                    }
+                ]
+            },
+            "contents": [
+                {
+                    "role": "user",
+                    "parts": [
+                        {
+                            "text": user_prompt,
+                        }
+                    ],
+                }
+            ],
             "generationConfig": generation_config,
         }
 
         model = LlmService.model()
+
+        if not model:
+            raise RuntimeError("GEMINI_MODEL is empty")
+
+        logger.warning("Gemini model used: %s", model)
+
         url = f"{GEMINI_BASE_URL}/models/{model}:generateContent"
+
         async with httpx.AsyncClient(timeout=60.0) as client:
             response = await client.post(
                 url,
-                params={"key": LlmService.gemini_api_key()},
+                params={
+                    "key": LlmService.gemini_api_key(),
+                },
                 json=payload,
             )
+
             if response.is_error:
                 LlmService._raise_for_status(response, provider="gemini")
+
             data = response.json()
 
         candidates = data.get("candidates") or []
+
         if not candidates:
             raise ValueError("Gemini returned no candidates")
 
         block_reason = candidates[0].get("finishReason")
+
         if block_reason in {"SAFETY", "RECITATION"}:
             raise ValueError(f"Gemini blocked the response ({block_reason})")
 
         parts = candidates[0].get("content", {}).get("parts") or []
         text_parts = [part.get("text", "") for part in parts if part.get("text")]
         text = "".join(text_parts).strip()
+
         if not text:
             raise ValueError("Gemini returned empty text")
+
         return text
 
     @staticmethod
     def _raise_for_status(response: httpx.Response, *, provider: str) -> None:
         try:
             body = response.json()
-            if provider == "groq":
-                message = body.get("error", {}).get("message", response.text)
-            else:
-                message = body.get("error", {}).get("message", response.text)
+            message = body.get("error", {}).get("message", response.text)
         except Exception:
             message = response.text
+
         raise httpx.HTTPStatusError(
             message,
             request=response.request,
@@ -436,32 +640,69 @@ class LlmService:
     @staticmethod
     def _friendly_error(exc: Exception) -> str:
         provider = LlmService.provider()
+
         if isinstance(exc, httpx.HTTPStatusError):
             status = exc.response.status_code
+
             try:
                 body = exc.response.json()
                 msg = body.get("error", {}).get("message", str(exc))
             except Exception:
                 msg = str(exc)
+
+            msg_lower = msg.lower()
+
             if status == 429:
+                if provider == "openai":
+                    return "rate limit or quota exceeded — check OpenAI API billing and limits"
+                if provider == "vercel":
+                    return "rate limit or quota exceeded — check Vercel AI Gateway usage"
                 if provider == "groq":
                     return "rate limit exceeded — check Groq console or wait"
-                return "quota exceeded — enable billing or wait in Google AI Studio"
-            if status == 400 and "location" in msg.lower():
+
+                return "quota exceeded — wait or check Google AI Studio rate limits"
+
+            if status == 400 and "location" in msg_lower:
                 return "API not available in your region"
+
             if status in {401, 403}:
                 return "invalid or unauthorized API key"
+
             if status == 404:
+                if provider == "openai":
+                    return "model not found — check OPENAI_MODEL"
+                if provider == "vercel":
+                    return "model not found — check AI_GATEWAY_MODEL"
                 if provider == "groq":
                     return "model not found — check GROQ_MODEL"
-                return "model not found — check GEMINI_MODEL"
+
+                return "model not found — set GEMINI_MODEL=gemini-2.5-flash"
+
             return msg[:200] or f"HTTP {status}"
+
         return str(exc)[:200]
 
     @staticmethod
     def _llm_unavailable_message(exc: Exception) -> str:
         provider = LlmService.provider()
         hint = LlmService._friendly_error(exc)
+
+        if provider == "openai":
+            return (
+                "Сейчас не удалось получить ответ от OpenAI API. "
+                f"Причина: {hint}. "
+                "Проверьте OPENAI_API_KEY и billing на platform.openai.com, "
+                "затем перезапустите backend."
+            )
+
+        if provider == "vercel":
+            return (
+                "Сейчас не удалось получить ответ от Vercel AI Gateway. "
+                f"Причина: {hint}. "
+                "Проверьте AI_GATEWAY_API_KEY и AI_GATEWAY_MODEL, "
+                "затем перезапустите backend."
+            )
+
         if provider == "groq":
             return (
                 "Сейчас не удалось получить ответ от Groq. "
@@ -469,10 +710,11 @@ class LlmService:
                 "Проверьте GROQ_API_KEY на https://console.groq.com — "
                 "затем перезапустите backend."
             )
+
         return (
             "Сейчас не удалось получить ответ от Gemini. "
             f"Причина: {hint}. "
-            "Проверьте GEMINI_API_KEY на https://aistudio.google.com — "
+            "Проверьте GEMINI_API_KEY и GEMINI_MODEL в .env, "
             "затем перезапустите backend."
         )
 
@@ -483,74 +725,126 @@ class LlmService:
         session_title: str,
     ) -> str:
         lines = []
+
         if session_title:
             lines.append(f"Session title: {session_title}")
+
         if history:
             lines.append("Conversation so far:")
+
             for role, content in history[-12:]:
                 label = "User" if role == "user" else "Assistant"
                 lines.append(f"{label}: {content}")
+
         lines.append(f'Latest user message: "{user_text}"')
         lines.append(
             'Return JSON: {"reply": "<assistant message>", "suggested_app": "<app_id or null>"}'
         )
+
         return "\n".join(lines)
 
     @staticmethod
     def _parse_chat_response(raw: str, user_text: str) -> tuple[str, str | None]:
         data = LlmService._load_json(raw)
+
         reply = str(data.get("reply", "")).strip()
         suggested = data.get("suggested_app")
+
         if suggested is not None:
             suggested = str(suggested).strip() or None
+
             if suggested and suggested.lower() in {"null", "none"}:
                 suggested = None
+
         if suggested and suggested not in VALID_APP_IDS:
             suggested = None
+
         if not reply:
             return LlmService._fallback_chat_reply(user_text)
+
         return reply, suggested
 
     @staticmethod
     def _parse_route_response(raw: str, context_text: str) -> tuple[str, str]:
         data = LlmService._load_json(raw)
+
         app_id = str(data.get("app_id", "")).strip()
         reason = str(data.get("reason", "")).strip()
+
         if app_id not in VALID_APP_IDS:
             return LlmService._fallback_route(context_text)
+
         if not reason:
             reason = f"Recommended {MINI_APPS[app_id]['title']} based on the session context."
+
         return app_id, reason
 
     @staticmethod
     def _load_json(raw: str) -> dict[str, Any]:
         cleaned = raw.strip()
+
         if cleaned.startswith("```"):
             cleaned = re.sub(r"^```(?:json)?\s*", "", cleaned)
             cleaned = re.sub(r"\s*```$", "", cleaned)
+
         return json.loads(cleaned)
 
     @staticmethod
     def _fallback_chat_reply(user_text: str) -> tuple[str, str | None]:
         normalized = user_text.lower()
-        if any(word in normalized for word in ["anxiety", "worry", "stress", "panic", "тревог", "волную", "стресс"]):
+
+        if any(
+            word in normalized
+            for word in [
+                "anxiety",
+                "worry",
+                "stress",
+                "panic",
+                "тревог",
+                "волную",
+                "стресс",
+            ]
+        ):
             return (
                 "I hear that stress or worry is present. When you're ready, use Build context "
                 "and try the Anxiety Helper mini-app.",
                 "anxiety-helper",
             )
-        if any(word in normalized for word in ["choose", "decision", "option", "unsure", "выбор", "решени"]):
+
+        if any(
+            word in normalized
+            for word in [
+                "choose",
+                "decision",
+                "option",
+                "unsure",
+                "выбор",
+                "решени",
+            ]
+        ):
             return (
                 "This sounds like a decision situation. Build context first, then open "
                 "the Decision Assistant to compare your options.",
                 "decision-assistant",
             )
-        if any(word in normalized for word in ["goal", "plan", "improve", "habit", "цель", "план"]):
+
+        if any(
+            word in normalized
+            for word in [
+                "goal",
+                "plan",
+                "improve",
+                "habit",
+                "цель",
+                "план",
+            ]
+        ):
             return (
                 "Planning could help here. After building context, try the Goal Planner "
                 "to break this into small steps.",
                 "goal-planner",
             )
+
         return (
             "Thank you for sharing. Tell me a bit more, or use Build context and "
             "Problem Analysis to structure the situation.",
@@ -560,12 +854,45 @@ class LlmService:
     @staticmethod
     def _fallback_route(context_text: str) -> tuple[str, str]:
         normalized = context_text.lower()
-        if any(word in normalized for word in ["anxiety", "worry", "stress", "panic", "afraid", "тревог"]):
+
+        if any(
+            word in normalized
+            for word in [
+                "anxiety",
+                "worry",
+                "stress",
+                "panic",
+                "afraid",
+                "тревог",
+            ]
+        ):
             return "anxiety-helper", "The session mentions worry, stress, or anxiety."
-        if any(word in normalized for word in ["choose", "decision", "option", "unsure", "выбор"]):
+
+        if any(
+            word in normalized
+            for word in [
+                "choose",
+                "decision",
+                "option",
+                "unsure",
+                "выбор",
+            ]
+        ):
             return "decision-assistant", "The session is about choosing between options."
-        if any(word in normalized for word in ["goal", "plan", "improve", "habit", "цель", "план"]):
+
+        if any(
+            word in normalized
+            for word in [
+                "goal",
+                "plan",
+                "improve",
+                "habit",
+                "цель",
+                "план",
+            ]
+        ):
             return "goal-planner", "The session focuses on goals and planning."
+
         return "problem-analysis", "The session needs basic problem structuring first."
 
 

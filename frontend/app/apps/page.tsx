@@ -29,9 +29,9 @@ function AppsContent() {
   return (
     <div className="container grid">
       <section className="card">
-        <p className="eyebrow">Mini-app catalog</p>
+        <p className="eyebrow">Guided tool catalog</p>
         <h1>Guided tools</h1>
-        <p>Each mini-app asks four questions and saves a small practical result.</p>
+        <p>Each guided tool asks four questions and saves a practical result for the session summary.</p>
         {error && <p className="error">{error}</p>}
       </section>
 
@@ -45,7 +45,7 @@ function AppsContent() {
             </ul>
             <div>
               <Link className="button" href={`/apps/${app.id}${sessionId ? `?session=${sessionId}` : ""}`}>
-                Open
+                Open tool
               </Link>
             </div>
           </div>

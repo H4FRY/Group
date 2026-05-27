@@ -58,7 +58,7 @@ function DashboardContent() {
         <div className="actions">
           <button className="button" type="button" onClick={createSession}>New session</button>
           <Link className="secondary-button" href="/sessions">Session history</Link>
-          <Link className="secondary-button" href="/apps">Mini-app catalog</Link>
+          <Link className="secondary-button" href="/apps">Guided tools</Link>
         </div>
         {error && <p className="error">{error}</p>}
       </section>

@@ -7,7 +7,7 @@ from fastapi.middleware.cors import CORSMiddleware
 
 from .config import get_cors_origins
 from .database import Base, engine
-from .routers import auth, chat, context, mini_apps, progress, router, sessions, summary
+from .routers import auth, chat, context, mini_apps, progress, router, sessions, settings, summary
 
 
 @asynccontextmanager
@@ -40,6 +40,7 @@ app.include_router(router.router)
 app.include_router(mini_apps.router)
 app.include_router(progress.router)
 app.include_router(summary.router)
+app.include_router(settings.router)
 
 
 @app.get("/")
@@ -53,6 +54,8 @@ def health_check() -> dict[str, str | bool | None]:
         "llm_provider": provider,
         "llm_configured": LlmService.is_configured(),
         "llm_model": LlmService.model(),
+        "openai_configured": provider == "openai",
+        "vercel_gateway_configured": provider == "vercel",
         "gemini_configured": provider == "gemini",
         "groq_configured": provider == "groq",
     }

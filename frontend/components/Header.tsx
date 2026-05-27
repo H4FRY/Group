@@ -3,17 +3,29 @@
 import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
 import { useEffect, useState } from "react";
-import { apiRequest, clearToken, getToken, saveCurrentSession } from "@/lib/api";
-import type { Session } from "@/lib/types";
+import { apiRequest, clearToken, getToken } from "@/lib/api";
 
 type Theme = "light" | "dark";
+type AiProviderOption = {
+  id: string;
+  label: string;
+  configured: boolean;
+  models: string[];
+};
+type AiSettings = {
+  provider: string;
+  model: string | null;
+  configured: boolean;
+  options: AiProviderOption[];
+};
 
 export default function Header() {
   const router = useRouter();
   const pathname = usePathname();
   const [open, setOpen] = useState(true);
-  const [sessions, setSessions] = useState<Session[]>([]);
   const [theme, setTheme] = useState<Theme>("light");
+  const [aiSettings, setAiSettings] = useState<AiSettings | null>(null);
+  const [aiError, setAiError] = useState("");
   const showAppNav = pathname !== "/" && pathname !== "/login";
 
   useEffect(() => {
@@ -21,9 +33,9 @@ export default function Header() {
       return;
     }
 
-    apiRequest<Session[]>("/sessions")
-      .then(setSessions)
-      .catch(() => setSessions([]));
+    apiRequest<AiSettings>("/settings/ai")
+      .then(setAiSettings)
+      .catch(() => setAiSettings(null));
   }, [showAppNav, pathname]);
 
   useEffect(() => {
@@ -57,6 +69,39 @@ export default function Header() {
     localStorage.setItem("mindpath_theme", nextTheme);
     document.documentElement.dataset.theme = nextTheme;
   }
+
+  async function updateAiSettings(provider: string, model?: string | null) {
+    setAiError("");
+    try {
+      const option = aiSettings?.options.find((item) => item.id === provider);
+      const selectedModel = model || option?.models[0] || "";
+      const updated = await apiRequest<AiSettings>("/settings/ai", {
+        method: "PUT",
+        body: JSON.stringify({ provider, model: selectedModel })
+      });
+      setAiSettings(updated);
+    } catch (err) {
+      setAiError(err instanceof Error ? err.message : "Could not update AI settings");
+    }
+  }
+
+  const modelButtons = aiSettings?.options.flatMap((option) =>
+    option.models.map((model) => ({
+      provider: option.id,
+      label: option.label,
+      model,
+      configured: option.configured,
+      active: option.id === aiSettings.provider && model === aiSettings.model
+    }))
+  ).sort((a, b) => {
+    if (a.active !== b.active) {
+      return a.active ? -1 : 1;
+    }
+    if (a.configured !== b.configured) {
+      return a.configured ? -1 : 1;
+    }
+    return a.label.localeCompare(b.label) || a.model.localeCompare(b.model);
+  }) || [];
 
   if (!showAppNav) {
     return null;
@@ -93,23 +138,29 @@ export default function Header() {
           <Link href="/dashboard">Dashboard</Link>
           <Link href="/chat">Chat</Link>
           <Link href="/sessions">Sessions</Link>
-          <Link href="/apps">Mini-apps</Link>
+          <Link href="/apps">Guided tools</Link>
         </nav>
 
-        <div className="sidebar-section">
-          <p>Recent sessions</p>
-          <div className="sidebar-history">
-            {sessions.slice(0, 10).map((session) => (
-              <Link
-                key={session.id}
-                href={`/chat?session=${session.id}`}
-                onClick={() => saveCurrentSession(session.id)}
+        <div className="sidebar-status">
+          <span>Models</span>
+          <div className="model-list">
+            {modelButtons.map((item) => (
+              <button
+                key={`${item.provider}:${item.model}`}
+                className={`model-button ${item.active ? "active" : ""}`}
+                type="button"
+                onClick={() => updateAiSettings(item.provider, item.model)}
+                disabled={!item.configured}
               >
-                {session.title}
-              </Link>
+                <span className={`model-dot ${item.configured ? "online" : "offline"}`} />
+                <span>
+                  <strong>{item.label}</strong>
+                  <small>{item.model}</small>
+                </span>
+              </button>
             ))}
-            {sessions.length === 0 && <span>No sessions yet</span>}
           </div>
+          {aiError && <p>{aiError}</p>}
         </div>
 
         <div className="sidebar-footer">

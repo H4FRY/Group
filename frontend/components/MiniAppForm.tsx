@@ -47,7 +47,7 @@ export default function MiniAppForm({ appId }: { appId: string }) {
 
     const hasAnswer = Object.values(answers).some((value) => value.trim());
     if (!hasAnswer) {
-      setError("Fill in at least one answer to get an AI insight.");
+      setError("Fill in at least one answer to analyze it.");
       return;
     }
 
@@ -60,7 +60,7 @@ export default function MiniAppForm({ appId }: { appId: string }) {
       });
       setInsight(response);
     } catch (err) {
-      setError(err instanceof Error ? err.message : "Could not get AI insight");
+      setError(err instanceof Error ? err.message : "Could not analyze answers");
     } finally {
       setInsightLoading(false);
     }
@@ -81,18 +81,18 @@ export default function MiniAppForm({ appId }: { appId: string }) {
       });
       setResult(saved);
     } catch (err) {
-      setError(err instanceof Error ? err.message : "Could not save mini-app result");
+      setError(err instanceof Error ? err.message : "Could not save guided tool result");
     }
   }
 
   return (
     <RequireMiniAppLayout
-      title={app?.title || "Mini-app"}
+      title={app?.title || "Guided tool"}
       description={app?.description || "Loading guided tool..."}
     >
       {!sessionId && (
         <div className="notice">
-          Open this mini-app from a chat session. You can create a new session on the dashboard.
+          Open this guided tool from a chat session. You can create a new session on the dashboard.
         </div>
       )}
 
@@ -117,7 +117,7 @@ export default function MiniAppForm({ appId }: { appId: string }) {
               onClick={requestInsight}
               disabled={insightLoading}
             >
-              {insightLoading ? "Getting insight..." : "Get AI insight"}
+              {insightLoading ? "Analyzing..." : "Analyze answers"}
             </button>
             <button className="button" type="submit">Save result</button>
             <Link className="secondary-button" href={summaryLink}>Open summary</Link>
@@ -129,10 +129,10 @@ export default function MiniAppForm({ appId }: { appId: string }) {
 
       {insight && (
         <div className="panel">
-          <h3>AI insight{insight.llm_used ? "" : " (offline mode)"}</h3>
+          <h3>Answer analysis{insight.llm_used ? "" : " (offline mode)"}</h3>
           <p>{insight.insight}</p>
           <p className="eyebrow">
-            Insight is a preview — save the form when you are ready for the final result.
+            This is a preview. Save the form when you are ready to add the result to summary.
           </p>
         </div>
       )}
@@ -160,7 +160,7 @@ function RequireMiniAppLayout({
   return (
     <div className="container grid">
       <div className="card">
-        <p className="eyebrow">Mini-app</p>
+        <p className="eyebrow">Guided tool</p>
         <h1>{title}</h1>
         <p>{description}</p>
       </div>

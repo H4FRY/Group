@@ -138,6 +138,25 @@ class ProgressList(BaseModel):
     average_mood: float | None
 
 
+class AiProviderOption(BaseModel):
+    id: str
+    label: str
+    configured: bool
+    models: list[str]
+
+
+class AiSettingsRead(BaseModel):
+    provider: str
+    model: str | None
+    configured: bool
+    options: list[AiProviderOption]
+
+
+class AiSettingsUpdate(BaseModel):
+    provider: str
+    model: str | None = None
+
+
 class SummaryResponse(BaseModel):
     session: SessionRead
     context: ContextRead | None

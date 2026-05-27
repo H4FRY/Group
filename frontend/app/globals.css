@@ -159,8 +159,8 @@ body[data-sidebar="closed"] .main {
   width: min(310px, calc(100vw - 28px));
   height: 100vh;
   display: grid;
-  grid-template-rows: auto auto 1fr auto;
-  gap: 18px;
+  grid-template-rows: auto auto minmax(0, 1fr) auto;
+  gap: 14px;
   padding: 18px;
   border-right: 1px solid var(--border);
   background: color-mix(in srgb, var(--panel) 92%, transparent);
@@ -233,6 +233,122 @@ body[data-sidebar="closed"] .main {
 .sidebar-nav a:hover,
 .sidebar-history a:hover {
   border-color: var(--primary);
+}
+
+.sidebar-status {
+  min-height: 0;
+  display: grid;
+  grid-template-rows: auto minmax(0, 1fr) auto;
+  gap: 6px;
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  padding: 12px;
+  background: var(--panel-soft);
+  align-self: start;
+}
+
+.sidebar-status span {
+  color: var(--muted);
+  font-size: 12px;
+  font-weight: 800;
+  text-transform: uppercase;
+}
+
+.sidebar-status strong {
+  overflow: hidden;
+  color: var(--text);
+  font-size: 13px;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.sidebar-status p {
+  margin: 0;
+  color: var(--danger);
+  font-size: 12px;
+  line-height: 1.35;
+}
+
+.model-list {
+  display: grid;
+  align-content: start;
+  gap: 8px;
+  min-height: 0;
+  max-height: min(430px, calc(100vh - 430px));
+  overflow: auto;
+  padding-right: 2px;
+}
+
+.model-button {
+  display: grid;
+  grid-template-columns: auto 1fr;
+  gap: 10px;
+  align-items: center;
+  width: 100%;
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  min-height: 70px;
+  padding: 14px 12px;
+  background: var(--panel);
+  color: var(--text);
+  cursor: pointer;
+  text-align: left;
+}
+
+.model-button:hover:not(:disabled),
+.model-button.active {
+  border-color: var(--primary);
+  box-shadow: 0 10px 24px rgba(79, 70, 229, 0.12);
+}
+
+.model-button:disabled {
+  cursor: not-allowed;
+  opacity: 0.62;
+}
+
+.model-button span:last-child {
+  min-width: 0;
+  display: grid;
+  gap: 2px;
+}
+
+.model-button small {
+  overflow: hidden;
+  color: var(--muted);
+  font-size: 12px;
+  line-height: 1.25;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.model-dot {
+  width: 10px;
+  height: 10px;
+  border-radius: 50%;
+  animation: model-dot-pulse 1.9s ease-in-out infinite;
+}
+
+.model-dot.online {
+  background: #16a34a;
+  box-shadow: 0 0 0 4px rgba(22, 163, 74, 0.12);
+}
+
+.model-dot.offline {
+  background: #dc2626;
+  box-shadow: 0 0 0 4px rgba(220, 38, 38, 0.12);
+  animation-duration: 2.4s;
+}
+
+@keyframes model-dot-pulse {
+  0%,
+  100% {
+    transform: scale(1);
+    opacity: 0.86;
+  }
+  50% {
+    transform: scale(1.28);
+    opacity: 1;
+  }
 }
 
 .sidebar-section {

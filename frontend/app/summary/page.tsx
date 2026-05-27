@@ -46,8 +46,8 @@ function SummaryContent() {
       `Constraints: ${summary.context?.constraints || "No context"}`,
       `Recommended app: ${summary.context?.recommended_app || "No recommendation"}`,
       "",
-      "Mini-app result:",
-      summary.latest_result?.result_text || "No mini-app result yet",
+      "Guided tool result:",
+      summary.latest_result?.result_text || "No guided tool result yet",
       "",
       "Messages:",
       ...summary.messages.map((message) => `${message.role}: ${message.text}`)
@@ -70,7 +70,7 @@ function SummaryContent() {
       <section className="card">
         <p className="eyebrow">Final summary</p>
         <h1>Session overview</h1>
-        <p>Review the saved context, messages, mini-app result, and progress entries.</p>
+        <p>Review the saved context, messages, guided tool result, and progress entries.</p>
         <div className="actions">
           <button className="button" type="button" onClick={downloadTxt} disabled={!summary}>
             Export TXT
@@ -87,11 +87,11 @@ function SummaryContent() {
             <div className="list-item"><strong>Problem</strong><p>{summary.context?.problem || "No context yet"}</p></div>
             <div className="list-item"><strong>Emotion</strong><p>{summary.context?.emotion || "No context yet"}</p></div>
             <div className="list-item"><strong>Goal</strong><p>{summary.context?.goal || "No context yet"}</p></div>
-            <div className="list-item"><strong>Recommended app</strong><p>{summary.context?.recommended_app || "No recommendation yet"}</p></div>
+            <div className="list-item"><strong>Recommended tool</strong><p>{summary.context?.recommended_app || "No recommendation yet"}</p></div>
           </section>
 
           <section className="panel grid">
-            <h2>Mini-app result</h2>
+            <h2>Guided tool result</h2>
             <p>{summary.latest_result?.result_text || "No result saved yet."}</p>
           </section>
 

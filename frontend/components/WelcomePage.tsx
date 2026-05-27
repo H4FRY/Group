@@ -40,7 +40,7 @@ export default function WelcomePage() {
           <h1>Welcome</h1>
           <p>
             Start with a focused reflection workspace, then move through login,
-            guided chat, mini-apps, and a final session summary.
+            guided chat, focused tools, and a final session summary.
           </p>
           <div className="welcome-steps" aria-label="Application flow">
             <span>Welcome</span>
