@@ -109,6 +109,7 @@ function ChatContent() {
       setRoute(response);
       setContext(response.context);
       setSuggestedApp(null);
+      router.push(`/apps/${response.recommended_app}?session=${sessionId}`);
     } catch (err) {
       setError(err instanceof Error ? err.message : "Could not analyze session");
     } finally {
